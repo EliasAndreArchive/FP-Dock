@@ -1,0 +1,99 @@
+name: Build FP Dock
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows-x64
+            runner: windows-2022
+          - name: Linux-x64
+            runner: ubuntu-22.04
+          - name: macOS-arm64
+            runner: macos-14
+          - name: macOS-x64
+            runner: macos-15-intel
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONHASHSEED: '0'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            requirements-build.txt
+            source/requirements.txt
+      - name: Linux Qt runtime
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0 libgl1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 libxcb-xinerama0 libxcb-randr0 libxcb-render-util0 libxcb-image0
+      - name: Install pinned dependencies
+        run: python -m pip install --only-binary=:all: -r requirements-build.txt
+      - name: Generate synthetic camera clips
+        run: python scripts/make_demo.py
+      - name: Test source
+        run: python -m unittest discover -s source/tests -v
+      - name: Build native application
+        run: python scripts/build.py
+      - name: Test packaged application
+        run: python scripts/check_bundle.py
+      - name: Upload package and checksum
+        uses: actions/upload-artifact@v7
+        with:
+          name: FP-Dock-${{ matrix.name }}
+          path: artifacts/*
+          if-no-files-found: error
+          retention-days: 3
+      - name: Upload smoke-test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: Checks-${{ matrix.name }}
+          path: build/bundle-check
+          if-no-files-found: ignore
+          retention-days: 3
+
+  release:
+    name: Publish downloads
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: FP-Dock-*
+          path: release-assets
+          merge-multiple: true
+      - name: Publish native builds
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            tag="$GITHUB_REF_NAME"
+          else
+            tag="build-${GITHUB_SHA:0:8}"
+          fi
+          gh release create "$tag" release-assets/* \
+            --target "$GITHUB_SHA" \
+            --title "FP Dock — ${GITHUB_SHA:0:8}" \
+            --prerelease \
+            --notes-file docs/RELEASE-NOTES.md
