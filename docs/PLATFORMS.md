@@ -30,3 +30,5 @@ The build script uses pinned Python dependencies and PyInstaller 6.22.3. The wor
 PyInstaller builds for its host OS; it is not a cross-compiler. The Linux package targets desktop systems compatible with the build's glibc and Qt requirements, rather than promising compatibility with every Linux distribution. macOS archives preserve bundle symlinks with `ditto`. Linux tar archives preserve executable permissions.
 
 Sources: [GitHub-hosted runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners), [PyInstaller manual](https://pyinstaller.org/en/stable/), [Qt mounted-volume discovery](https://doc.qt.io/qt-6.12/qstorageinfo.html).
+
+Intel macOS uses rawpy 0.25.1 because newer rawpy versions no longer provide an Intel macOS wheel. Other platforms use 0.27.1. The exact dependency version is recorded in each package; behavior is checked against that platform's build.

@@ -6,7 +6,7 @@ FP Dock application code is MIT licensed. Dependencies and supplied assets retai
 | --- | --- | --- |
 | Python | Build interpreter; exact version in `BUILD-INFO.json` | PSF |
 | PySide6, Shiboken6, Qt | 6.12.0; https://code.qt.io/cgit/pyside/pyside-setup.git/ and https://code.qt.io/cgit/qt/ | LGPLv3 option and component notices |
-| rawpy / LibRaw | rawpy 0.27.1; https://github.com/letmaik/rawpy and https://github.com/LibRaw/LibRaw | MIT / LGPL-2.1-or-later option; bundled notices apply |
+| rawpy / LibRaw | rawpy 0.27.1 (0.25.1 on Intel macOS); https://github.com/letmaik/rawpy and https://github.com/LibRaw/LibRaw | MIT / LGPL-2.1-or-later option; bundled notices apply |
 | NumPy | 2.5.4; https://github.com/numpy/numpy | BSD and bundled notices |
 | tifffile | 2026.10.15; https://github.com/cgohlke/tifffile | BSD-3-Clause |
 | imagecodecs | 2026.10.10; https://github.com/cgohlke/imagecodecs | BSD-3-Clause and bundled codec notices |
