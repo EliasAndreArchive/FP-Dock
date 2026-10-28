@@ -182,3 +182,7 @@ FP Dock is an independent project by [EliasAndreArchive](https://github.com/Elia
 ### Permanently deleting clips
 
 Use the clip checkboxes, then **Delete selected**. FP Dock asks for confirmation with Cancel selected by default. **Permanently delete** removes the selected video files/RAW frames and their associated audio from the source, bypassing the Recycle Bin/Trash. This is irreversible: make a verified backup first. Unselected clips and unrelated support files are kept. The browser refreshes afterward; errors report partial deletion. Preview and transfer operations still leave originals unchanged.
+
+### Recognizing earlier transfers
+
+FP Dock reads the existing **Extras/transfer.json** and **checksums.sha256** receipts at the selected destination (including its export subfolders). Exports from before this feature remain compatible; there is no new receipt format. Only completed, verified receipts qualify. In the background it compares every frame/video file and associated audio in each clip with the saved SHA-256 and the destination copy. Confirmed clips show a **Transferred ✓** badge and their export folder in the tooltip; a count appears above the grid. Selection stays under your control. Missing, changed, partial, or unverified copies are not marked. Checking pauses during playback/buffering, and stops during transfers/deletion. Refresh rescans; choosing another destination checks that location. The badge confirms the check at that moment, not permanent protection against later disk changes.
