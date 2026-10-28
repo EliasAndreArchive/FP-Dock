@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 
 from raw_library import Clip, scan_folder, decode_frame, natural_key
+from deletion import deletion_plan, delete_files
 from transfer import inventory_folder, transfer_all, TransferCancelled, select_inventory
 from preview_color import DAVINCI,default_output_view
 from devices import storage_snapshot, ArrivalTracker, set_startup, find_cinema,DeviceEventFilter,request_foreground
@@ -443,6 +444,8 @@ class Ingest(QMainWindow):
         controls.setContentsMargins(0,0,0,0)
         controls.addWidget(button("All",lambda:self.check_all(True)))
         controls.addWidget(button("None",lambda:self.check_all(False)))
+        self.delete_button=button("Delete selected",self.delete_selected,"Permanently delete the checked clips from the source camera or card")
+        controls.addWidget(self.delete_button)
         top.addWidget(self.visual_row)
         content.addWidget(self.summary)
         self.empty=LoadingPanel()
@@ -833,6 +836,57 @@ class Ingest(QMainWindow):
         if not self.busy and self.preview.clip:
             self.preview.toggle()
 
+    def delete_selected(self):
+        if self.busy or self.scanning or not self.inventory or not self.selected_keys:
+            return
+        try:
+            plan=deletion_plan(self.inventory,self.clips,self.selected_keys)
+        except (OSError,ValueError) as exc:
+            QMessageBox.warning(self,"Cannot delete clips",str(exc))
+            return
+        count=len(self.selected_keys)
+        warning=QMessageBox(self)
+        warning.setIcon(QMessageBox.Warning)
+        warning.setWindowTitle("Permanently delete selected clips?")
+        warning.setText(f"Do you really want to permanently delete {count} selected clip(s)?")
+        warning.setInformativeText(f"Source: {self.source}\n\nThis deletes their video frames/files and associated audio directly from the camera, SD card or source folder. It is irreversible and does not use the Recycle Bin or Trash. Make sure you have a verified backup. Other support files are kept.")
+        warning.setDetailedText("\n".join(str(path) for path,entry in plan))
+        confirm=warning.addButton("Permanently delete",QMessageBox.DestructiveRole)
+        cancel=warning.addButton(QMessageBox.Cancel)
+        warning.setDefaultButton(cancel)
+        warning.setEscapeButton(cancel)
+        warning.exec()
+        if warning.clickedButton() is not confirm:
+            return
+        self.preview.clear_clip()
+        self.scan_cancel.set()
+        self.transfer_cancel=threading.Event()
+        self.busy=True
+        self.update_actions()
+        self.status.setText("Deleting selected clips…")
+        device=self.inventory.device
+        cancelled=self.transfer_cancel
+        self.submit(self.transfer_pool,lambda:delete_files(plan,device,cancelled),self.deletion_finished)
+
+    def deletion_finished(self,result):
+        self.busy=False
+        if result[0]:
+            deleted,error=result[1]
+        else:
+            deleted,error=0,str(result[1])
+        if error:
+            QMessageBox.warning(self,"Deletion stopped",f"Deleted {deleted} file(s). Deletion stopped: {error}\nRefresh the source to review what remains. Deleted files cannot be restored by FP Dock.")
+        if self.disconnect_pending:
+            self.disconnect_pending=False
+            self.disconnect_source()
+        elif self.source:
+            self.refresh()
+        self.show_header_notice(f"Deleted {deleted} file(s)" if not error else "Deletion stopped — check remaining clips")
+        self.update_actions()
+        if self.quitting:
+            self.close()
+            QApplication.instance().quit()
+
     def check_highlighted(self,checked):
         self.grid.set_checks(self.grid.selectedItems(),checked)
 
@@ -1018,6 +1072,7 @@ class Ingest(QMainWindow):
         self.transfer_button.setEnabled(bool(self.last_result) or (ready and not self.busy))
         amount=size_text(self.selected_inventory.total_bytes) if self.selected_inventory else '0 B'
         self.transfer_button.setText("Open verified copy ↗" if self.last_result else ("Transferring…" if self.busy else f"Transfer {len(self.selected_keys)} clips · {selected_duration_text(self.clips,self.selected_keys)} · {amount}"))
+        self.delete_button.setEnabled(bool(self.selected_keys) and source_connected and not self.busy and not self.scanning and not self.thumbnails_loading)
         self.destination_button.setEnabled(not self.busy)
         self.export_name.setEnabled(not self.busy)
         self.choose_source_button.setEnabled(not self.busy)

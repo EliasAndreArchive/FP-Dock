@@ -8,7 +8,7 @@
 
 FP Dock treats a folder of DNG frames as one video clip. It was made for the Sigma fp's `CINEMA` folder, including losslessly compressed CinemaDNG. The interface keeps your clip browser, player, and transfer controls together.
 
-**Your RAW files stay unchanged.** Color, exposure, shadow lift, playback quality, thumbnails, and dark mode affect the preview only. Transfers copy original file bytes and verify the destination by reading it back.
+**Preview and transfer leave your RAW files unchanged.** Color, exposure, shadow lift, playback quality, thumbnails, and dark mode affect the preview only. Transfers copy original file bytes and verify the destination by reading it back.
 
 ## Download and open
 
@@ -178,3 +178,7 @@ Settings and `ingest.log` live in Qt's per-user application-data folder. The int
 Application code is [MIT licensed](LICENSE). Qt/PySide6, LibRaw/rawpy, imagecodecs, NumPy, tifffile, Inter, and other bundled components retain their own licenses; see [third-party notices](THIRD-PARTY-NOTICES.md). The bundled Resolve LUT is a supplied project asset, separate from the library implementations.
 
 FP Dock is an independent project by [EliasAndreArchive](https://github.com/EliasAndreArchive), with a visual style inspired by [eliasandre.space](https://eliasandre.space). It is not affiliated with Sigma or Blackmagic Design.
+
+### Permanently deleting clips
+
+Use the clip checkboxes, then **Delete selected**. FP Dock asks for confirmation with Cancel selected by default. **Permanently delete** removes the selected video files/RAW frames and their associated audio from the source, bypassing the Recycle Bin/Trash. This is irreversible: make a verified backup first. Unselected clips and unrelated support files are kept. The browser refreshes afterward; errors report partial deletion. Preview and transfer operations still leave originals unchanged.
