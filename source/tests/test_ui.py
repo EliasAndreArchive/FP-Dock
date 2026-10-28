@@ -226,6 +226,75 @@ class UiTests(unittest.TestCase):
         self.assertEqual(len(w.selected_keys),12)
         self.assertEqual(len(w.selected_inventory.files),93)
 
+    def test_delete_warning_is_immediate_and_repeatable(self):
+        from PySide6.QtCore import QTimer
+        from PySide6.QtWidgets import QMessageBox
+        self.load_demo()
+        w=self.window
+        seen=[]
+        def cancel_warning():
+            dialog=self.app.activeModalWidget()
+            self.assertIsInstance(dialog,QMessageBox)
+            self.assertIn('irreversible',dialog.informativeText())
+            self.assertEqual(dialog.defaultButton(),dialog.button(QMessageBox.Cancel))
+            seen.append(dialog)
+            dialog.button(QMessageBox.Cancel).click()
+        with patch('ingest.deletion_plan') as plan,patch('ingest.delete_files') as delete:
+            for _ in range(3):
+                QTimer.singleShot(0,cancel_warning)
+                w.delete_selected()
+                self.assertFalse(w.busy)
+                self.assertIsNone(w.deletion_dialog)
+            plan.assert_not_called()
+            delete.assert_not_called()
+        self.assertEqual(len(seen),3)
+
+    def test_delete_validation_runs_after_confirmation_off_ui_thread(self):
+        import threading
+        from PySide6.QtCore import QTimer
+        from PySide6.QtWidgets import QMessageBox
+        self.load_demo()
+        w=self.window
+        ui_thread=threading.get_ident()
+        worker_threads=[]
+        def plan(*args):
+            worker_threads.append(threading.get_ident())
+            return ()
+        def confirm_warning():
+            dialog=self.app.activeModalWidget()
+            for b in dialog.buttons():
+                if dialog.buttonRole(b)==QMessageBox.DestructiveRole:b.click();return
+            self.fail('Missing explicit delete button')
+        with patch('ingest.deletion_plan',side_effect=plan),patch('ingest.delete_files',return_value=(0,'')) as delete:
+            QTimer.singleShot(0,confirm_warning)
+            w.delete_selected()
+            self.wait(lambda:not w.busy)
+            delete.assert_called_once()
+        self.assertTrue(worker_threads)
+        self.assertNotEqual(worker_threads[0],ui_thread)
+
+    def test_confirm_really_deletes_only_disposable_selected_clip(self):
+        from PySide6.QtCore import QTimer
+        from PySide6.QtWidgets import QMessageBox
+        from raw_library import Clip
+        from transfer import inventory_folder
+        w=self.window
+        source=self.root/'CINEMA';source.mkdir()
+        selected=source/'selected.dng';selected.write_bytes(b'disposable test frame')
+        kept=source/'kept.dng';kept.write_bytes(b'keep this test frame')
+        a=Clip(source,'Selected',[selected]);b=Clip(source,'Kept',[kept])
+        w.source=source;w.inventory=inventory_folder(source);w.clips=[a,b];w.selected_keys={a.key}
+        def confirm_warning():
+            dialog=self.app.activeModalWidget()
+            for button in dialog.buttons():
+                if dialog.buttonRole(button)==QMessageBox.DestructiveRole:button.click();return
+            self.fail('Missing delete confirmation')
+        QTimer.singleShot(0,confirm_warning)
+        w.delete_selected()
+        self.wait(lambda:not w.busy)
+        self.assertFalse(selected.exists())
+        self.assertTrue(kept.exists())
+
 
 if __name__=='__main__':
     unittest.main(verbosity=2)

@@ -864,24 +864,36 @@ class Ingest(QMainWindow):
     def delete_selected(self):
         if self.busy or self.scanning or not self.inventory or not self.selected_keys:
             return
-        try:
-            plan=deletion_plan(self.inventory,self.clips,self.selected_keys)
-        except (OSError,ValueError) as exc:
-            QMessageBox.warning(self,"Cannot delete clips",str(exc))
+        if getattr(self,'deletion_dialog',None) is not None:
+            self.deletion_dialog.raise_()
+            self.deletion_dialog.activateWindow()
             return
+        inventory=self.inventory
+        clips=list(self.clips)
+        keys=set(self.selected_keys)
+        generation=self.generation
         count=len(self.selected_keys)
         warning=QMessageBox(self)
         warning.setIcon(QMessageBox.Warning)
         warning.setWindowTitle("Permanently delete selected clips?")
         warning.setText(f"Do you really want to permanently delete {count} selected clip(s)?")
         warning.setInformativeText(f"Source: {self.source}\n\nThis deletes their video frames/files and associated audio directly from the camera, SD card or source folder. It is irreversible and does not use the Recycle Bin or Trash. Make sure you have a verified backup. Other support files are kept.")
-        warning.setDetailedText("\n".join(str(path) for path,entry in plan))
+        warning.setDetailedText("\n".join(clip.name for clip in clips if clip.key in keys))
         confirm=warning.addButton("Permanently delete",QMessageBox.DestructiveRole)
         cancel=warning.addButton(QMessageBox.Cancel)
         warning.setDefaultButton(cancel)
         warning.setEscapeButton(cancel)
-        warning.exec()
-        if warning.clickedButton() is not confirm:
+        self.deletion_dialog=warning
+        try:
+            warning.exec()
+            confirmed=warning.clickedButton() is confirm
+        finally:
+            self.deletion_dialog=None
+            warning.deleteLater()
+        if not confirmed:
+            return
+        if self.busy or self.inventory is not inventory or self.generation!=generation:
+            QMessageBox.warning(self,"Source changed","The source changed while the warning was open. Select your clips again; nothing was deleted.")
             return
         self.preview.clear_clip()
         self.history_cancel.set()
@@ -889,14 +901,24 @@ class Ingest(QMainWindow):
         self.transfer_cancel=threading.Event()
         self.history_cancel.set()
         self.busy=True
+        self.deleting=True
+        self.last_result=None
+        self.reset_transfer_progress()
+        self.progress.show()
+        self.cancel_button.show()
         self.update_actions()
-        self.status.setText("Deleting selected clips…")
-        device=self.inventory.device
+        self.status.setText("Preparing deletion — checking selected files…")
         cancelled=self.transfer_cancel
-        self.submit(self.transfer_pool,lambda:delete_files(plan,device,cancelled),self.deletion_finished)
+        def work():
+            progress=self.progress_signals.changed.emit
+            plan=deletion_plan(inventory,clips,keys,cancelled,progress)
+            return delete_files(plan,inventory.device,cancelled,progress)
+        self.submit(self.transfer_pool,work,self.deletion_finished)
 
     def deletion_finished(self,result):
         self.busy=False
+        self.deleting=False
+        self.cancel_button.hide()
         if result[0]:
             deleted,error=result[1]
         else:
@@ -1127,7 +1149,7 @@ class Ingest(QMainWindow):
     def cancel_transfer(self):
         self.transfer_cancel.set()
         self.cancel_button.setEnabled(False)
-        self.status.setText("Stopping at the next file-read boundary. Verified copies are kept for resume.")
+        self.status.setText("Stopping deletion safely. Already deleted files cannot be restored." if getattr(self,"deleting",False) else "Stopping at the next file-read boundary. Verified copies are kept for resume.")
 
     def update_actions(self):
         self.update_header_connection()
@@ -1137,7 +1159,7 @@ class Ingest(QMainWindow):
         ready=bool(self.selected_inventory and self.selected_inventory.files and self.destination and source_connected)
         self.transfer_button.setEnabled(bool(self.last_result) or (ready and not self.busy))
         amount=size_text(self.selected_inventory.total_bytes) if self.selected_inventory else '0 B'
-        self.transfer_button.setText("Open verified copy ↗" if self.last_result else ("Transferring…" if self.busy else f"Transfer {len(self.selected_keys)} clips · {selected_duration_text(self.clips,self.selected_keys)} · {amount}"))
+        self.transfer_button.setText("Open verified copy ↗" if self.last_result else ("Deleting…" if self.busy and getattr(self,"deleting",False) else "Transferring…" if self.busy else f"Transfer {len(self.selected_keys)} clips · {selected_duration_text(self.clips,self.selected_keys)} · {amount}"))
         self.delete_button.setEnabled(bool(self.selected_keys) and source_connected and not self.busy and not self.scanning and not self.thumbnails_loading)
         self.destination_button.setEnabled(not self.busy)
         self.export_name.setEnabled(not self.busy)
