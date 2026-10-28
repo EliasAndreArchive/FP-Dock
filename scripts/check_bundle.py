@@ -3,12 +3,12 @@ from pathlib import Path
 import json
 import os
 import subprocess
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 bundle = json.loads((ROOT/'build/bundle.json').read_text())
 executable = bundle['executable']
-check = ROOT/'build/bundle-check'
-check.mkdir(exist_ok=True)
+check = Path(tempfile.mkdtemp(prefix='bundle-check-', dir=ROOT/'build'))
 env = dict(os.environ, QT_QPA_PLATFORM='offscreen')
 report = check/'window.png'
 subprocess.run([executable, str(ROOT/'Demo/CINEMA'), '--state-dir', str(check/'state'),

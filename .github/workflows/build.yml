@@ -64,7 +64,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: Checks-${{ matrix.name }}
-          path: build/bundle-check
+          path: build/bundle-check*
           if-no-files-found: ignore
           retention-days: 3
 

@@ -16,16 +16,17 @@ def deletion_plan(inventory, clips, selected_keys):
     root=inventory.source.resolve(strict=True)
     plan=[]
     for path in sorted(paths):
-        relative=path.relative_to(root)
+        relative=path.resolve(strict=True).relative_to(root)
         if path==root or root not in path.resolve(strict=True).parents:
             raise ValueError("Refusing to delete outside the source folder.")
-        if any(is_link(parent) for parent in [root,*path.parents] if parent==root or root in parent.parents):
+        if any(is_link(parent) for parent in [path,*path.parents]
+               if parent.resolve()==root or root in parent.resolve().parents):
             raise ValueError("Refusing to delete through a linked folder.")
         entry=entries.get(relative.as_posix())
         if entry is None:
             raise ValueError("Source files changed. Refresh before deleting.")
         _assert_entry(path,entry,inventory.device)
-        plan.append((path,entry))
+        plan.append((root/relative,entry))
     return tuple(plan)
 
 
