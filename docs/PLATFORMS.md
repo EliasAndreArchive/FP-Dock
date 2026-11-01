@@ -25,7 +25,7 @@ Turning Auto-open off removes that entry. On macOS the LaunchAgent is picked up 
 
 ## Reproducible native packaging
 
-The build script uses pinned Python dependencies and PyInstaller 6.22.3. The workflow builds independently on Windows x64, Ubuntu 22.04 x64, macOS 14 arm64, and macOS 15 Intel. Packages contain the application, original source, license notices, demo data, dependency/build information, and a checksum for the archive.
+The build script uses pinned Python dependencies and PyInstaller 6.22.3. The workflow builds independently on Windows x64, Ubuntu 22.04 x64, macOS 15 arm64, and macOS 15 Intel. Packages contain the application, original source, license notices, demo data, dependency/build information, and a checksum for the archive.
 
 PyInstaller builds for its host OS; it is not a cross-compiler. The Linux package targets desktop systems compatible with the build's glibc and Qt requirements, rather than promising compatibility with every Linux distribution. macOS archives preserve bundle symlinks with `ditto`. Linux tar archives preserve executable permissions.
 

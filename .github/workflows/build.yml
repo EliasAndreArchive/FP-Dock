@@ -25,7 +25,7 @@ jobs:
           - name: Linux-x64
             runner: ubuntu-22.04
           - name: macOS-arm64
-            runner: macos-14
+            runner: macos-15
           - name: macOS-x64
             runner: macos-15-intel
     env:
