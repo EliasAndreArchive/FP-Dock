@@ -32,6 +32,7 @@ def deletion_plan(inventory, clips, selected_keys, cancelled=None, progress=None
         path=root/entry.relative
         if any(folder in path.parents for folder in dedicated):paths.add(path)
     paths-=protected
+    canonical_protected={p.parent.resolve()/p.name for p in protected}
     directories=set(dedicated)
     for relative in inventory.directories:
         folder=root/relative
@@ -50,6 +51,7 @@ def deletion_plan(inventory, clips, selected_keys, cancelled=None, progress=None
                     if is_link(original):raise ValueError("Refusing to delete through a linked folder.")
             parents[path.parent]=parent
         canonical=parents[path.parent]/path.name
+        if canonical in canonical_protected:continue
         relative=canonical.relative_to(root)
         entry=entries.get(relative.as_posix())
         if entry is None:
@@ -57,7 +59,8 @@ def deletion_plan(inventory, clips, selected_keys, cancelled=None, progress=None
         plan.append((canonical,entry))
         if progress and (i%64==0 or i==len(paths)):
             progress({'phase':'Preparing deletion','processed':i,'total':total,'file':str(path)})
-    return DeletionPlan(plan,sorted(directories,key=lambda p:len(p.parts),reverse=True))
+    unique={path:entry for path,entry in plan}
+    return DeletionPlan(unique.items(),sorted(directories,key=lambda p:len(p.parts),reverse=True))
 
 
 def delete_files(plan, device, cancelled, progress=None):
