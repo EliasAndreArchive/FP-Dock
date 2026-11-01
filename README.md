@@ -18,6 +18,7 @@ Open [Releases](https://github.com/EliasAndreArchive/FP-Dock/releases) and choos
 | --- | --- | --- |
 | Windows 64-bit | `FP-Dock-Windows-x64.zip` | Extract the entire folder, then open `FPDock.exe`. Keep `_internal` beside it. |
 | Linux 64-bit | `FP-Dock-Linux-x64.tar.gz` | Extract it, then run `./FPDock` inside the extracted folder. A graphical desktop is required. |
+| Windows 11 ARM64 (Snapdragon) | `FP-Dock-Windows-arm64.zip` | Extract the complete folder, then run `FPDock.exe`. |
 | Mac with Apple silicon | `FP-Dock-macOS-arm64.zip` | Extract it and move `FPDock.app` to Applications before enabling Auto-open. |
 | Mac with an Intel processor | `FP-Dock-macOS-x64.zip` | Use the Intel package and move `FPDock.app` to Applications. |
 
@@ -158,7 +159,7 @@ python scripts/build.py
 python scripts/check_bundle.py
 ```
 
-Packages and SHA-256 checksums are written to `artifacts/`. Build on the target operating system: PyInstaller is not a cross-compiler. The [GitHub Actions workflow](.github/workflows/build.yml) builds Windows, Linux, Apple-silicon macOS, and Intel macOS independently, tests the packaged executables, and publishes prerelease downloads only when all four builds pass.
+Packages and SHA-256 checksums are written to `artifacts/`. Build on the target operating system: PyInstaller is not a cross-compiler. The [GitHub Actions workflow](.github/workflows/build.yml) builds Windows, Linux, Apple-silicon macOS, and Intel macOS independently, tests the packaged executables, and publishes prerelease downloads only when all five builds pass.
 
 ## Troubleshooting
 
@@ -181,8 +182,12 @@ FP Dock is an independent project by [EliasAndreArchive](https://github.com/Elia
 
 ### Permanently deleting clips
 
-Use the clip checkboxes, then **Delete selected**. FP Dock asks for confirmation with Cancel selected by default. **Permanently delete** removes the selected video files/RAW frames and their associated audio from the source, bypassing the Recycle Bin/Trash. This is irreversible: make a verified backup first. Unselected clips and unrelated support files are kept. The browser refreshes afterward; errors report partial deletion. Preview and transfer operations still leave originals unchanged.
+Use the clip checkboxes, then **Delete selected**. FP Dock asks for confirmation with Cancel selected by default. **Permanently delete** removes the selected video files/RAW frames and their associated audio from the source, bypassing the Recycle Bin/Trash. This is irreversible: make a verified backup first. Dedicated selected clip folders are removed completely, including XMP and support files. Shared folders preserve unselected clips and unrelated files; the chosen source root is never removed. The browser refreshes afterward; errors report partial deletion. Preview and transfer operations still leave originals unchanged.
 
 ### Recognizing earlier transfers
 
 FP Dock reads the existing **Extras/transfer.json** and **checksums.sha256** receipts at the selected destination (including its export subfolders). Exports from before this feature remain compatible; there is no new receipt format. Only completed, verified receipts qualify. In the background it compares every frame/video file and associated audio in each clip with the saved SHA-256 and the destination copy. Confirmed clips show a **Transferred ✓** badge and their export folder in the tooltip; a count appears above the grid. Selection stays under your control. Missing, changed, partial, or unverified copies are not marked. Checking pauses during playback/buffering, and stops during transfers/deletion. Refresh rescans; choosing another destination checks that location. The badge confirms the check at that moment, not permanent protection against later disk changes.
+
+### Opening drives and folders
+
+**Open…** accepts an SSD/drive root, a CINEMA folder, or any footage folder. If the selected location contains one CINEMA folder, it is opened directly; otherwise FP Dock scans the selected folder recursively. Open stays available when another source is loaded. Automatically detecting newly connected camera media still uses CINEMA discovery on external drives. On first interactive launch, disconnect temporary footage devices, leave permanent drives attached, dismiss the setup notice, then reconnect the footage media so the watcher can recognize arrivals.

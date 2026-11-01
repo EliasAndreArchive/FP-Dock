@@ -32,3 +32,5 @@ PyInstaller builds for its host OS; it is not a cross-compiler. The Linux packag
 Sources: [GitHub-hosted runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners), [PyInstaller manual](https://pyinstaller.org/en/stable/), [Qt mounted-volume discovery](https://doc.qt.io/qt-6.12/qstorageinfo.html).
 
 Intel macOS uses rawpy 0.25.1 because newer rawpy versions no longer provide an Intel macOS wheel. Other platforms use 0.27.1. The exact dependency version is recorded in each package; behavior is checked against that platform's build.
+
+Windows ARM64 is built natively on the windows-11-arm runner with ARM64 Python and dependency wheels, and published separately as FP-Dock-Windows-arm64.zip. Native ARM camera/GPU hardware testing remains separate from automated checks. macOS builds currently require macOS 14 or newer because of their Qt wheels.

@@ -40,3 +40,22 @@ class DeletionTests(unittest.TestCase):
             root=Path(tmp);a,b=self.fixture(root);b.audio=a.audio;inv=inventory_folder(root)
             count,error=delete_files(deletion_plan(inv,[a,b],{a.key}),inv.device,threading.Event())
             self.assertEqual(count,1);self.assertFalse(error);self.assertTrue(b.audio.exists())
+
+    def test_dedicated_clip_folder_including_metadata_is_removed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);folder=root/'A001_001';folder.mkdir()
+            frame=folder/'1.dng';frame.write_bytes(b'frame')
+            (folder/'SPP_metadata.xmp').write_bytes(b'metadata')
+            nested=folder/'support';nested.mkdir();(nested/'extra.txt').write_bytes(b'sidecar')
+            clip=Clip(folder,'clip',[frame]);inv=inventory_folder(root)
+            count,error=delete_files(deletion_plan(inv,[clip],{clip.key}),inv.device,threading.Event())
+            self.assertFalse(error);self.assertEqual(count,3)
+            self.assertFalse(folder.exists());self.assertTrue(root.exists())
+
+    def test_shared_folder_preserves_metadata_and_other_clip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);folder=root/'shared';folder.mkdir()
+            a,b=self.fixture(folder);inv=inventory_folder(root)
+            count,error=delete_files(deletion_plan(inv,[a,b],{a.key}),inv.device,threading.Event())
+            self.assertFalse(error);self.assertTrue(folder.exists())
+            self.assertTrue(b.frames[0].exists());self.assertTrue((folder/'notes.txt').exists())

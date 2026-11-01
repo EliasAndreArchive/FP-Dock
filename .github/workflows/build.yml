@@ -20,6 +20,8 @@ jobs:
         include:
           - name: Windows-x64
             runner: windows-2022
+          - name: Windows-arm64
+            runner: windows-11-arm
           - name: Linux-x64
             runner: ubuntu-22.04
           - name: macOS-arm64

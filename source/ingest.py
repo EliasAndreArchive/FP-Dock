@@ -224,9 +224,9 @@ def inspect_source(path,cancel):
     path=Path(path)
     if path.name.casefold()!="cinema":
         found=find_cinema(path)
-        if len(found)!=1:
-            raise OSError("Choose the specific CINEMA folder on the card.")
-        path=found[0]
+        if len(found)==1:
+            path=found[0]
+        # Otherwise browse the chosen folder recursively, including multiple CINEMA trees.
     inventory=inventory_folder(path,cancel)
     clips,errors=scan_folder(Path(path),cancel)
     if errors:
@@ -427,7 +427,7 @@ class Ingest(QMainWindow):
         self.sources.hide()
         self.sources.setObjectName('muted')
         self.sources.setSizePolicy(QSizePolicy.Ignored,QSizePolicy.Preferred)
-        self.choose_source_button=button("Open…",self.choose_source,"Select a CINEMA folder manually (Ctrl+O)")
+        self.choose_source_button=button("Open…",self.choose_source,"Open a drive, CINEMA folder, or any footage folder (Ctrl+O)")
         self.content_splitter=QSplitter(Qt.Horizontal)
         main=QWidget()
         content=QVBoxLayout(main)
@@ -666,7 +666,7 @@ class Ingest(QMainWindow):
             self.load_source(data["path"],data["key"])
 
     def choose_source(self):
-        path=QFileDialog.getExistingDirectory(self,"Choose the CINEMA folder")
+        path=QFileDialog.getExistingDirectory(self,"Choose a drive or footage folder")
         if path:
             self.load_source(path)
 
@@ -877,7 +877,7 @@ class Ingest(QMainWindow):
         warning.setIcon(QMessageBox.Warning)
         warning.setWindowTitle("Permanently delete selected clips?")
         warning.setText(f"Do you really want to permanently delete {count} selected clip(s)?")
-        warning.setInformativeText(f"Source: {self.source}\n\nThis deletes their video frames/files and associated audio directly from the camera, SD card or source folder. It is irreversible and does not use the Recycle Bin or Trash. Make sure you have a verified backup. Other support files are kept.")
+        warning.setInformativeText(f"Source: {self.source}\n\nThis deletes their video frames/files and associated audio directly from the camera, SD card or source folder. It is irreversible and does not use the Recycle Bin or Trash. Make sure you have a verified backup. Metadata and support files inside dedicated selected clip folders are also deleted; shared folders and unselected clips are kept.")
         warning.setDetailedText("\n".join(clip.name for clip in clips if clip.key in keys))
         confirm=warning.addButton("Permanently delete",QMessageBox.DestructiveRole)
         cancel=warning.addButton(QMessageBox.Cancel)
@@ -1164,7 +1164,7 @@ class Ingest(QMainWindow):
         self.destination_button.setEnabled(not self.busy)
         self.export_name.setEnabled(not self.busy)
         self.choose_source_button.setEnabled(not self.busy)
-        self.choose_source_button.setVisible(self.source is None)
+        self.choose_source_button.setVisible(True)
         self.refresh_button.setEnabled(bool(self.source) and not self.busy and not self.scanning)
         self.sources.setEnabled(not self.busy)
         self.grid.setEnabled(not self.busy)
@@ -1316,6 +1316,16 @@ def main():
         return 0
     logging.basicConfig(filename=state/"ingest.log",level=logging.INFO,format="%(asctime)s %(message)s")
     logging.info('Watcher starting; tray_launch=%s',args.watch)
+    settings_path=state/"settings.json"
+    try:
+        first_settings=json.loads(settings_path.read_text(encoding="utf-8"))
+    except (OSError,ValueError):
+        first_settings={}
+    if not args.state_dir and not args.smoke_test and not first_settings.get('media_setup_notice_v1'):
+        QMessageBox.information(None,"Before you start FP Dock",
+            "Please disconnect SD cards, portable SSDs, and the Sigma FP containing camera footage before continuing. Leave your permanent PC drives connected.\n\nAfter FP Dock opens, reconnect your camera, card, or SSD. Newly connected media with a CINEMA folder will be detected automatically. You can also use Open to choose any drive or folder manually.")
+        first_settings['media_setup_notice_v1']=True
+        settings_path.write_text(json.dumps(first_settings,indent=2),encoding="utf-8")
     window=Ingest(state,args.watch,detect=not bool(args.smoke_test))
     if args.headless_check:
         window.setAttribute(Qt.WA_DontShowOnScreen,True)
