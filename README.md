@@ -184,10 +184,8 @@ FP Dock is an independent project by [EliasAndreArchive](https://github.com/Elia
 
 Use the clip checkboxes, then **Delete selected**. FP Dock asks for confirmation with Cancel selected by default. **Permanently delete** removes the selected video files/RAW frames and their associated audio from the source, bypassing the Recycle Bin/Trash. This is irreversible: make a verified backup first. Dedicated selected clip folders are removed completely, including XMP and support files. Shared folders preserve unselected clips and unrelated files; the chosen source root is never removed. The browser refreshes afterward; errors report partial deletion. Preview and transfer operations still leave originals unchanged.
 
-### Recognizing earlier transfers
-
-FP Dock reads the existing **Extras/transfer.json** and **checksums.sha256** receipts at the selected destination (including its export subfolders). Exports from before this feature remain compatible; there is no new receipt format. Only completed, verified receipts qualify. In the background it compares every frame/video file and associated audio in each clip with the saved SHA-256 and the destination copy. Confirmed clips show a **Transferred ✓** badge and their export folder in the tooltip; a count appears above the grid. Selection stays under your control. Missing, changed, partial, or unverified copies are not marked. Checking pauses during playback/buffering, and stops during transfers/deletion. Refresh rescans; choosing another destination checks that location. The badge confirms the check at that moment, not permanent protection against later disk changes.
-
 ### Opening drives and folders
 
 **Open…** accepts an SSD/drive root, a CINEMA folder, or any footage folder. If the selected location contains one CINEMA folder, it is opened directly; otherwise FP Dock scans the selected folder recursively. Open stays available when another source is loaded. Automatically detecting newly connected camera media still uses CINEMA discovery on external drives. On first interactive launch, disconnect temporary footage devices, leave permanent drives attached, dismiss the setup notice, then reconnect the footage media so the watcher can recognize arrivals.
+
+The selected clip’s metadata includes ISO, shutter speed and aperture when present in its DNG/EXIF tags. Missing values appear as —. Previous-export detection and its background archive scanning have been removed; Extras receipts remain part of normal verified transfers.

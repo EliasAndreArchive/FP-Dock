@@ -1,11 +1,11 @@
 """Permanent right-hand player. Live RAW GPU processing; no disk previews."""
 from __future__ import annotations
-from PySide6.QtCore import Qt,QUrl,Signal,QTimer
+from PySide6.QtCore import Qt,QUrl,Signal,QTimer,QEvent
 from PySide6.QtGui import QPainter,QPen,QDesktopServices,QGuiApplication,QImage,QKeySequence,QShortcut
 from PySide6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QSlider,QStackedWidget,QComboBox,QSizePolicy,QFrame,QButtonGroup
 from PySide6.QtMultimedia import QMediaPlayer,QAudioOutput,QMediaMetaData
 from PySide6.QtMultimediaWidgets import QVideoWidget
-from raw_library import load_metadata
+from raw_library import load_metadata,exposure_label
 from preview_color import DAVINCI,default_output_view
 from live_gpu import create_surface
 from live_worker import LiveRawWorker
@@ -16,6 +16,12 @@ from theme import color as ui_color
 from playback_slider import PlaybackSlider
 
 VIDEO_EXTENSIONS={".mov",".mp4",".m4v",".mxf",".avi",".mkv",".mts",".m2ts"}
+
+class DividerLine(QWidget):
+    def paintEvent(self,event):
+        painter=QPainter(self)
+        painter.fillRect(self.rect(),ui_color('#e5e2d6'))
+
 
 class Preview(QWidget):
     visualsChanged=Signal(str,bool)
@@ -63,7 +69,7 @@ class Preview(QWidget):
         heading.addWidget(self.folder_button)
         layout.addLayout(heading)
         self.detail=label("Live preview · Originals stay unchanged","muted")
-        self.detail.setWordWrap(False)
+        self.detail.setWordWrap(True)
         self.detail.setSizePolicy(QSizePolicy.Ignored,QSizePolicy.Preferred)
         layout.addWidget(self.detail)
         self.stack=QStackedWidget()
@@ -248,12 +254,31 @@ class Preview(QWidget):
                 self.start()
         self.update_time()
 
-    def paintEvent(self,event):
-        super().paintEvent(event)
-        painter=QPainter(self);painter.setPen(QPen(ui_color('#e5e2d6'),1))
-        for widget,edge in getattr(self,'divider_widgets',[]):
+    def set_dividers(self,widgets):
+        self.divider_widgets=widgets
+        self.divider_lines=[]
+        for widget,edge in widgets:
+            widget.installEventFilter(self)
+            line=DividerLine(self)
+            line.setAttribute(Qt.WA_TransparentForMouseEvents)
+            self.divider_lines.append(line)
+        QTimer.singleShot(0,self.update_dividers)
+
+    def update_dividers(self):
+        for (widget,edge),line in zip(getattr(self,'divider_widgets',[]),getattr(self,'divider_lines',[])):
             y=widget.geometry().bottom()+1 if edge=='bottom' else widget.y()-1
-            painter.drawLine(0,y,self.width()-1,y)
+            line.setGeometry(0,y,self.width(),1)
+            line.show();line.raise_();line.update()
+
+    def event(self,event):
+        result=super().event(event)
+        if event.type()==QEvent.LayoutRequest:QTimer.singleShot(0,self.update_dividers)
+        return result
+
+    def eventFilter(self,watched,event):
+        if event.type() in (QEvent.Move,QEvent.Resize,QEvent.Show):
+            QTimer.singleShot(0,self.update_dividers)
+        return super().eventFilter(watched,event)
 
     def resizeEvent(self,event):
         super().resizeEvent(event)
@@ -279,6 +304,7 @@ class Preview(QWidget):
             reserved+=max(0,height);count+=1
         available=max(80,self.height()-reserved-count*layout.spacing())
         self.stack.setFixedHeight(max(80,min(round(width/max(.1,self.clip_aspect)),available)))
+        QTimer.singleShot(0,self.update_dividers)
 
     def set_image_aspect(self,width,height):
         if width>0 and height>0:
@@ -302,7 +328,7 @@ class Preview(QWidget):
         self.backend=data["backend"]
         self.gpu_active=data["gpu"]
         seconds=round(self.clip.duration)
-        self.detail.setText(recorded_label(self.clip)+f" · {self.clip.width} × {self.clip.height} · {self.clip.fps:g} fps · {seconds//60}:{seconds%60:02}")
+        self.detail.setText(recorded_label(self.clip)+f" · {self.clip.width} × {self.clip.height} · {self.clip.fps:g} fps · {seconds//60}:{seconds%60:02} · "+exposure_label(self.clip))
         self.detail.setToolTip(self.detail.text())
         self.build_status.setText("Live GPU debayer + color · No disk cache" if data["gpu"] else "Live CPU fallback · No disk cache")
         self.build_status.setToolTip(data["backend"]+"\nRAW unpack / decompression runs on CPU. A bounded read-ahead queue is held in RAM.")
@@ -444,7 +470,7 @@ class Preview(QWidget):
         if isinstance(fps,(int,float)) and fps>0:info.append(f'{fps:g} fps')
         seconds=self.media.duration()//1000
         if seconds:info.append(f'{seconds//60}:{seconds%60:02}')
-        self.detail.setText(recorded_label(self.clip)+(' · '+' · '.join(info) if info else ''))
+        self.detail.setText(recorded_label(self.clip)+(' · '+' · '.join(info) if info else '')+' · '+exposure_label(self.clip))
         self.detail.setToolTip(self.detail.text())
 
     def video_frame(self,frame):

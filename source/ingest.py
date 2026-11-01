@@ -23,7 +23,6 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 
 from raw_library import Clip, scan_folder, decode_frame, natural_key
-from transfer_history import find_transferred,ReadGate
 from deletion import deletion_plan, delete_files
 from transfer import inventory_folder, transfer_all, TransferCancelled, select_inventory
 from preview_color import DAVINCI,default_output_view
@@ -117,14 +116,6 @@ class IngestCards(ClipCardDelegate):
             painter.setPen(QPen(ui_color("#fbfaf6"),1.7))
             painter.drawLine(int(rect.x()+4),int(rect.y()+10),int(rect.x()+8),int(rect.y()+14))
             painter.drawLine(int(rect.x()+8),int(rect.y()+14),int(rect.x()+15),int(rect.y()+5))
-        if index.data(Qt.UserRole+3):
-            badge=QRectF(option.rect.left()+13,option.rect.top()+17,91,20)
-            painter.setPen(Qt.NoPen)
-            painter.setBrush(ui_color("#fbfaf6"))
-            painter.drawRoundedRect(badge,7,7)
-            painter.setPen(ui_color("#1c1b17"))
-            painter.setFont(QFont("Inter",8))
-            painter.drawText(badge,Qt.AlignCenter,"Transferred ✓")
         painter.restore()
 
     def editorEvent(self,event,model,option,index):
@@ -298,12 +289,6 @@ class Ingest(QMainWindow):
         self.thumb_pool.setMaxThreadCount(1)
         self.detect_pool=QThreadPool(self)
         self.detect_pool.setMaxThreadCount(1)
-        self.history_cancel=threading.Event()
-        self.history_paused=threading.Event()
-        self.history_cache={}
-        self.history_revision=0
-        self.history_pool=QThreadPool(self)
-        self.history_pool.setMaxThreadCount(1)
         self.transfer_pool=QThreadPool(self)
         self.transfer_pool.setMaxThreadCount(1)
         self.progress_signals=ProgressSignals(self)
@@ -463,9 +448,6 @@ class Ingest(QMainWindow):
         controls.addWidget(self.delete_button)
         top.addWidget(self.visual_row)
         content.addWidget(self.summary)
-        self.history_label=label("","muted")
-        self.history_label.hide()
-        content.addWidget(self.history_label)
         self.empty=LoadingPanel()
         content.addWidget(self.empty,1)
         self.grid=IngestGrid()
@@ -496,8 +478,6 @@ class Ingest(QMainWindow):
         self.preview.scaleChanged.connect(self.playback_scale_changed)
         self.preview.setMinimumWidth(400)
         self.preview.visualsChanged.connect(self.apply_visuals)
-        self.preview.playbackChanged.connect(lambda *_:self.update_history_pause())
-        self.preview.bufferingChanged.connect(lambda *_:self.update_history_pause())
         self.preview.playbackChanged.connect(lambda playing:self.queue_thumbnail() if not playing else None)
         self.preview.bufferingChanged.connect(lambda loading:self.queue_thumbnail() if not loading else None)
         self.content_splitter.addWidget(self.preview)
@@ -562,7 +542,7 @@ class Ingest(QMainWindow):
             preview_layout.takeAt(preview_layout.count()-1)
         preview_layout.setStretch(preview_layout.indexOf(side),1)
         preview_layout.insertSpacing(preview_layout.indexOf(side),PANEL_PADDING-CONTENT_GAP)
-        self.preview.divider_widgets=[(self.header,"bottom"),(side,"top")]
+        self.preview.set_dividers([(self.header,"bottom"),(side,"top")])
         preview_layout.insertWidget(0,self.header)
         preview_layout.insertSpacing(1,PANEL_PADDING-CONTENT_GAP)
         QTimer.singleShot(0,self.preview.fit_video)
@@ -635,12 +615,10 @@ class Ingest(QMainWindow):
             self.disconnect_pending=True
             return
         old_key=self.source_key
-        self.history_cancel.set()
         self.scan_cancel.set()
         self.generation+=1
         self.scanning=False
         self.thumbnails_loading=False
-        self.history_label.hide()
         self.source=None;self.source_key=None;self.manual_source=False
         self.inventory=None;self.clips=[];self.selected_keys=set();self.selected_inventory=None
         self.grid.clear();self.grid.hide()
@@ -675,7 +653,6 @@ class Ingest(QMainWindow):
             return
         if self.preview:
             self.preview.clear_clip()
-        self.history_cancel.set()
         self.scan_cancel.set()
         self.scan_cancel=threading.Event()
         self.generation+=1
@@ -689,7 +666,6 @@ class Ingest(QMainWindow):
         self.clips=[]
         self.selected_keys=set()
         self.selected_inventory=None
-        self.history_label.hide()
         self.scanning=True
         self.thumbnails_loading=False
         self.grid.clear()
@@ -756,7 +732,6 @@ class Ingest(QMainWindow):
             self.grid.setCurrentRow(0)
             self.grid.blockSignals(False)
         self.filter_clips()
-        self.start_history_check()
         self.update_selection()
         self.update_actions()
         QTimer.singleShot(0,self.queue_thumbnail)
@@ -896,10 +871,8 @@ class Ingest(QMainWindow):
             QMessageBox.warning(self,"Source changed","The source changed while the warning was open. Select your clips again; nothing was deleted.")
             return
         self.preview.clear_clip()
-        self.history_cancel.set()
         self.scan_cancel.set()
         self.transfer_cancel=threading.Event()
-        self.history_cancel.set()
         self.busy=True
         self.deleting=True
         self.last_result=None
@@ -935,42 +908,6 @@ class Ingest(QMainWindow):
         if self.quitting:
             self.close()
             QApplication.instance().quit()
-
-    def update_history_pause(self):
-        if self.preview.playing or self.preview.buffering:self.history_paused.set()
-        else:self.history_paused.clear()
-
-    def start_history_check(self):
-        self.history_cancel.set()
-        self.history_cancel=threading.Event()
-        self.history_revision+=1
-        revision=self.history_revision
-        generation=self.generation
-        for i in range(self.grid.count()):
-            self.grid.item(i).setData(Qt.UserRole+3,None)
-        if self.busy or not self.inventory or not self.clips or not self.destination:
-            self.history_label.hide()
-            return
-        self.history_label.setText("Checking existing Extras receipts…")
-        self.history_label.show()
-        inventory,clips,destination,cancel=self.inventory,list(self.clips),self.destination,self.history_cancel
-        cache=self.history_cache
-        def work():
-            return find_transferred(inventory,clips,destination,ReadGate(cancel,self.history_paused),cache)
-        def finished(result):
-            if self.quitting or generation!=self.generation or revision!=self.history_revision or cancel.is_set():return
-            if not result[0]:
-                self.history_label.setText("Transfer history unavailable — no clips confirmed")
-                return
-            found=result[1]
-            for i in range(self.grid.count()):
-                item=self.grid.item(i);clip=item.data(Qt.UserRole)
-                session=found.get(clip.key)
-                item.setData(Qt.UserRole+3,session)
-                item.setToolTip(recorded_label(clip)+'\n'+str(clip.folder)+(('\nAlready transferred · SHA-256 confirmed\n'+session) if session else ''))
-            self.history_label.setText(f"{len(found)} already transferred · {len(clips)-len(found)} not confirmed at this destination")
-            self.grid.viewport().update()
-        self.submit(self.history_pool,work,finished)
 
     def check_highlighted(self,checked):
         self.grid.set_checks(self.grid.selectedItems(),checked)
@@ -1061,7 +998,6 @@ class Ingest(QMainWindow):
             self.destination_label.setText(path)
             self.destination_label.setToolTip(path)
             self.save_settings()
-            self.start_history_check()
             self.last_result=None
             self.reset_transfer_progress()
             self.update_actions()
@@ -1078,7 +1014,6 @@ class Ingest(QMainWindow):
             return
         if self.preview:
             self.preview.pause()
-        self.history_cancel.set()
         self.busy=True
         self.transfer_cancel=threading.Event()
         self.progress.setValue(0)
@@ -1141,7 +1076,6 @@ class Ingest(QMainWindow):
             self.disconnect_source()
         self.update_actions()
         self.queue_thumbnail()
-        self.start_history_check()
         if self.quitting:
             self.close()
             QApplication.instance().quit()
@@ -1263,12 +1197,11 @@ class Ingest(QMainWindow):
         self.device_debounce.stop()
         if self.device_filter is not None:
             QApplication.instance().removeNativeEventFilter(self.device_filter)
-        self.history_cancel.set()
         self.scan_cancel.set()
         self.generation+=1
         if self.preview:
             self.preview.shutdown()
-        for pool in (self.scan_pool,self.thumb_pool,self.detect_pool,self.transfer_pool,self.history_pool):
+        for pool in (self.scan_pool,self.thumb_pool,self.detect_pool,self.transfer_pool):
             pool.clear()
             pool.waitForDone()
         self.tray.hide()

@@ -36,6 +36,9 @@ class Clip:
     audio: Path | None = None
     metadata_loaded: bool = False
     error: str = ""
+    iso: float | None = None
+    shutter: float | None = None
+    aperture: float | None = None
 
     @property
     def key(self):
@@ -100,6 +103,18 @@ def load_metadata(clip: Clip):
             def value(code, default=None):
                 tag = tags.get(code) or main.tags.get(code)
                 return tag.value if tag else default
+            exif=value(34665,{})
+            def numeric(code,name):
+                raw=value(code)
+                if raw is None and isinstance(exif,dict):raw=exif.get(name,exif.get(code))
+                try:
+                    if code==34855 and isinstance(raw,(tuple,list)):raw=raw[0]
+                    number=float(raw[0])/float(raw[1]) if isinstance(raw,tuple) and len(raw)==2 else float(raw[0] if isinstance(raw,(tuple,list)) else raw)
+                    return number if 0<number<1e9 else None
+                except (TypeError,ValueError,ZeroDivisionError):return None
+            clip.iso=numeric(34855,'ISOSpeedRatings') or numeric(34855,'PhotographicSensitivity')
+            clip.shutter=numeric(33434,'ExposureTime')
+            clip.aperture=numeric(33437,'FNumber')
             clip.width = int(value(256, 0))
             clip.height = int(value(257, 0))
             try:
@@ -169,3 +184,10 @@ def develop_frame(path,quality="Balanced",view=DAVINCI,auto_exposure=True,auto_e
 
 def decode_frame(path: Path, quality="Balanced", exposure=0.0, white_balance="Camera", *, view=DAVINCI,auto_exposure=True,auto_ev=None):
     return develop_frame(path,quality,view,auto_exposure,auto_ev,exposure,white_balance)[0]
+
+
+def exposure_label(clip):
+    iso=f"{clip.iso:g}" if clip.iso else "—"
+    shutter=(f"1/{round(1/clip.shutter)} s" if clip.shutter<.5 else f"{clip.shutter:g} s") if clip.shutter else "—"
+    aperture=f"f/{clip.aperture:g}" if clip.aperture else "—"
+    return f"ISO {iso} · Shutter {shutter} · Aperture {aperture}"

@@ -295,6 +295,17 @@ class UiTests(unittest.TestCase):
         self.assertFalse(selected.exists())
         self.assertTrue(kept.exists())
 
+    def test_dividers_follow_layout_after_maximize_restore(self):
+        w=self.window
+        for _ in range(3):
+            w.showMaximized();self.app.processEvents()
+            w.showNormal();w.resize(1100,800);self.app.processEvents()
+            w.resize(1500,950);self.app.processEvents();self.app.processEvents()
+            for (panel,edge),line in zip(w.preview.divider_widgets,w.preview.divider_lines):
+                expected=panel.geometry().bottom()+1 if edge=='bottom' else panel.y()-1
+                self.assertEqual(line.x(),0);self.assertEqual(line.y(),expected)
+                self.assertEqual(line.width(),w.preview.width());self.assertEqual(line.height(),1)
+
 
 if __name__=='__main__':
     unittest.main(verbosity=2)
